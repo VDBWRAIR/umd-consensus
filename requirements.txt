@@ -1,0 +1,10 @@
+#For each import a, add package to file
+#Each line is the name of the package 
+#Specify versions of packages 
+typing 
+jsonschema
+toolz
+Pytest
+
+
+
