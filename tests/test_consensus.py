@@ -2,14 +2,14 @@ from typing import List
 from consensus.consensus import Base, PercentAnalysis
 from consensus.consensus import consensus
 from dataclasses import dataclass
-
+import unittest
 RefSeq = List[Base]
 Base = str
 depths = ()
 dumbRows = ()
 
 
-
+tc = unittest.TestCase()
 SamDepth= int
 
 @dataclass
@@ -31,7 +31,7 @@ def test_simplest_consensus20():
     alts = [VCFCall(AF=50, DP=5, INDEL=False, ALT='A', POS=1, REF='M')] #+dumbRows
     expected = ["A","N","Y","C","T"]
     result, log =  consensus(depths=[100, 100, 100, 100, 100], ref = refSeq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == result
+    assert expected == list(result)
     print(f"consensus({depths}, {refSeq}, {alts})")
 
 #test_simplest_consensus20(i)
@@ -43,7 +43,7 @@ def test_filter_ambigs():
     alts= [VCFCall(AF=75, DP=500 , INDEL=False, ALT="C", POS=2, REF="S" )]
     expected = ["G","T","S","T"]
     result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == result
+    assert expected == list(result)
     print(f"consensus({depths}, {refseq}, {alts})")
 
 
@@ -52,7 +52,7 @@ def test_AF():
     alts= [VCFCall(AF=15, DP=500 , INDEL=False, ALT="C", POS=2, REF = "S" )]
     expected = ["G","T","G","T"]
     result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == result
+    assert expected == list(result)
     print(f"consensus({depths}, {refseq}, {alts})")
 
 
@@ -61,7 +61,7 @@ def test_variant():
     alts= [VCFCall(AF=85, DP=500 , INDEL=False, ALT="A", POS=2, REF = "S" )]
     expected = ["G","T","A","T"]
     result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == result
+    assert expected == list(result)
     print(f"consensus({depths}, {refseq}, {alts})")
 
 
@@ -71,7 +71,7 @@ def test_variant_ambig():
     expected = ["G","T","R","T"]
     result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
     print(f"log: {log}")
-    assert expected == result, f"{result} != {expected}"
+    assert expected == list(result), f"{result} != {expected}"
    # print(f"consensus({depths}, {refseq}, {alts})")
 
 
@@ -84,8 +84,8 @@ def test_simplest_consensus20():
 
   # actual, log = zip(*actual) # [x[0] for x in actual]
   print(f"log: {log}")
-  expected = ( 'G', 'N', 'N', 'N' )
-  assert  actual == expected, f"{actual} != {expected}"
+  expected = [ 'G', 'N', 'N', 'N' ]
+  assert  expected == list(actual) , f"{actual} != {expected}"
 
 
 

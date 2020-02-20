@@ -29,14 +29,14 @@ Schema = dict
 # MAJORITY = 80
 Log = str
 from functools import partial
-IUPAC_AMBIG = ['A', 'C', 'T', 'G', 'R', 'Y', 'S', 'W', 'R', 'K', 'V', 'H', 'D', 'B']
-
+IUPAC_AMBIG = 'ACTGRYSWRKVHDB' #  {'A', 'C', 'T', 'G', 'R', 'Y', 'S', 'W', 'R', 'K', 'V', 'H', 'D', 'B'}
+IUPAC_AMBIG_REGEX = f"[{IUPAC_AMBIG}]"
 def percentN(MIND, MAJORITY): #TODO: add requireds here, then check in node logic
   return   OrderedDict({ "callN" : {"DP" : { "maximum" : MIND-1},  "<RESULT>" : lambda x: "N" } ,
                    "callAlt" : { "AF" : { "minimum" : MAJORITY} , "<RESULT>" : lambda x: x['ALT'] },  #TODO: ambiguous
                    "callAmbiguous" : {"AF" : { "minimum" : 100 - MAJORITY, "maximum" : MAJORITY }, "<RESULT>" : "???"},
-                   "callRef" : { "REF" : {"anyOf" :  IUPAC_AMBIG  }}, # calling ref is the default case
-                               "<RESULT>" : lambda x: x["REF"] })
+                   "callRef" : { "REF" : {"pattern" :  IUPAC_AMBIG_REGEX  }, # calling ref is the default case
+                                 "<RESULT>" : lambda x: x["REF"] }})
 # , "required" : ["AF", "ALT"]
 # , "required" : True
 # def consensus(depths: List[SamDepth], ref: RefSeq, alts: List[VCFRow], mind: int, majority: int) -> List[Base]:
