@@ -31,29 +31,31 @@ Log = str
 from functools import partial
 IUPAC_AMBIG = ['A', 'C', 'T', 'G', 'R', 'Y', 'S', 'W', 'R', 'K', 'V', 'H', 'D', 'B']
 
-def percentN(MIND, MAJORITY): #TODO: requied
-  return   OrderedDict({ "callN" : {"DP" : { "exclusiveMaximum" : MIND},  "<RESULT>" : lambda x: "N" } ,
-                   "callAlt" : { "AF" : { "inclusiveMinimum" : MAJORITY} , "<RESULT>" : lambda x: x['ALT'] },  #TODO: ambiguous
-                   "callAmbiguous" : {"AF?" : { "inclusiveMinimum" : 100 - MAJORITY, "exclusiveMaximum" : MAJORITY }, "<RESULT>" : "???"},
-                   "callRef" : { "anyOf" : [{ "PRC" : 100 - MAJORITY },
-                               { "AF" : { "inclusiveMaximum" : 100 - MAJORITY } },
-                               { "REF" : {"anyOf" :  IUPAC_AMBIG  }}] }, # calling ref is the default case
+def percentN(MIND, MAJORITY): #TODO: add requireds here, then check in node logic
+  return   OrderedDict({ "callN" : {"DP" : { "maximum" : MIND-1},  "<RESULT>" : lambda x: "N" } ,
+                   "callAlt" : { "AF" : { "minimum" : MAJORITY} , "<RESULT>" : lambda x: x['ALT'] },  #TODO: ambiguous
+                   "callAmbiguous" : {"AF" : { "minimum" : 100 - MAJORITY, "maximum" : MAJORITY }, "<RESULT>" : "???"},
+                   "callRef" : { "REF" : {"anyOf" :  IUPAC_AMBIG  }}, # calling ref is the default case
                                "<RESULT>" : lambda x: x["REF"] })
 # , "required" : ["AF", "ALT"]
 # , "required" : True
 # def consensus(depths: List[SamDepth], ref: RefSeq, alts: List[VCFRow], mind: int, majority: int) -> List[Base]:
-def consensus(depths: List[int], ref: List[Base], alts: List[VCFRow], pa: PercentAnalysis) -> Tuple[List[Base], List[Log]]:
+def consensus(depths: List[int], ref: List[Base], alts: List[VCFCall], pa: PercentAnalysis) -> Tuple[List[Base], List[Log]]:
   assert len(depths) == len(ref), f"{depths}, {ref}"
   assert len(depths) > 0
+  assert 0 <= pa.mind <= 100
+  assert 0 <= pa.majority <= 100
+  assert all(map(IUPAC_AMBIG.__contains__, ref))
+
   just_alts = { row.POS : row for row in alts }
   ordered_alts = []
   with_pos = zip(range(1_000_000_000), depths, ref)
-  for pos, depth, ref in with_pos:
+  for pos, depth, refbase in with_pos:
       existing_alt = just_alts.get(pos, None)
       if existing_alt:
          ordered_alts.append(existing_alt)
       else:
-         ordered_alts.append(VCFNoCall(pos, depth, ref))
+         ordered_alts.append(VCFNoCall(pos, depth, refbase))
   as_list_tuples = consensus_impl(ordered_alts, pa.mind, pa.majority)
   return tuple(zip(*as_list_tuples))
 
@@ -68,7 +70,9 @@ def call_base(schemaNodes: OrderedDict, alt: VCFRow) -> Tuple[Base, Log]:
    log = []
    for key, node in schemaNodes.items():
      try:
-        justSchema = {"type" : "object", "properties" : dtz.dissoc(node, '<RESULT>') }
+        n = dtz.dissoc(node, '<RESULT>')
+        justSchema = {"type" : "object", "properties" : n, "required" : list(n.keys()) }
+        # justSchema = dtz.assoc('required', node.eys()
         print( vcf_dict, justSchema)
         jsonschema.validate( vcf_dict, justSchema)
         result = node["<RESULT>"](vcf_dict)
