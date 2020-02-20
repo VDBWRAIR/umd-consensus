@@ -1,0 +1,646 @@
+* Conensus
+** Build reference 
+ - use the effect_start and effected_end to build the reference
+    Is it enough to replace and flatten afterwards? i.e.
+    ref[effected_start:effected_end] = chosen_alt 
+ - we do this only if we are doing `call_base`, not ambiguous, right?
+ - you don't want to actually push around the reference until after you do the fckn calls; so could represent 
+** Calls
+ - don't need to worry about calling N because we fill in the ref ahead of time--(though it seems like this could get it wrong but it's what we've been doing)
+ - copy ambiguous table from exisitng consensus code 
+Position = int
+#      split          splits a file by read group  lol
+* Work Programming
+** Run this
+** Run fluvartable
+ - then run on DoD cluster?
+** Release new ngs_mapper: using
+ - !! look at what someone else is doing w/ viral variant calling, esp. prep for [other] variant callers: we won't do that prerp in NGSBasecaller runs
+ - ngs-doit, assuming it's finished
+ - consider just using a straightforward (linear) bash-style python script <= prefer this probably to ngs-shake
+ - use samtools stats and plot-bamstats [might fail for novaseq?]
+ - look at indel correction, marking duplicates, etc.
+ - replace tagreads
+** Later: release ngs gui
+ - See [[Needs to run on windows]]
+ - ignore the sophisticated progress reporting and release pretty looking
+** Even Later: release SDB 
+*** Needs to run on windows
+STRONGLY prefer electron, because it's pretty, and it's mostly finished
+ - hopefully electron still works? I was going to port that onto VDB? Or I though I could run a server on the cluster?
+ - or there was some way to run it is an an HTML file in the browser? 
+ - can I run a java app on it? or even python?
+
+
+**** other
+#+NAME: Example C++ session
+#+begin_src C++  :includes <stdio.h>
+  int a=1;
+  int b=1;
+  printf("%d\n", a+b);
+#+end_src
+#+NAME: org-babel setup (not include install
+#+BEGIN_SRC emacs-lisp :session
+(setq org-confirm-babel-evaluate nil)
+
+(setq org-src-preserve-indentation t)
+ (org-babel-do-load-languages
+   'org-babel-load-languages
+   '(
+     (emacs-lisp . t)
+     ;; (shell   . t)
+     (C . t)
+     (python . t)))
+(print "hetoo")
+
+#+END_SRC
+* current work
+*** Samtools Notes
+    # note that the samtools reported depth is capped by its options, so should only be used to check for minimum depth
+        # maxd, which is used for samtools depth, must be over user-specified mind
+        # TODO: report the maxd used in the depth.txt file, or could be used in the filenamee..
+        # TODO: can copy samtools depth code from myself
+         # !! make sure to use -a flag to output 0-positions
+         # -d (maxd) defaults to 8k
+         # -q is the base quality threshold, under which all bases could be ignored, we probably not use this.
+         # samtools now comes with an option to export to fasta/fastq!
+        # REF\tPOS\tDEPTH\tMAXD
+   # if none of the above are 'statisfied', default to calling ref (i.e. under callAmbiguousRatio and not 'N')
+* Papa February 10 
+   :PROPERTIES:
+   :Effort:   22
+   :END:
+   :LOGBOOK:
+   CLOCK: [2020-02-10 Mon 12:33]--[2020-02-10 Mon 12:59] =>  0:26
+   CLOCK: [2020-02-10 Mon 09:37]--[2020-02-10 Mon 11:08] =>  1:31
+   :END:
+** Things
+1. time sheet
+2. start clock
+3. discuss goals and map plan
+4. update Pap after lunch
+
+*** On Break
+Papa: what does the end goal look like?
+** Today
+*** TODO Set up project
+ 1. clone our template
+ 2. test file and source file and requirements file
+*** TODO create test case
+ 1. must start with test_
+ 2. goes in tests/test_whatever.py
+*** TODO set up test runner
+ 1. just install pytest
+ 2. in future would automate
+*** TODO Implementation
+
+
+#+BEGIN_SRC dot :file foo.png
+digraph G {
+FastaFile -> {RefSeq1, RefSeq2};
+VCFFile -> {Chrom1, Chrom2};
+Chrom1 -> RowPerPosition;
+Bamfile -> DepthPerPosition;
+FastaFile -> BasePerPosition;
+{BasePerposition, UserOptions, DepthPerPosition, RowPerPosition} -> Caller;
+Caller -> {Consensus, Report};
+}
+
+#+END_SRC 
+
+#+RESULTS:
+[[file:foo.png]]
+
+#+NAME:
+
+#+RESULTS: 
+
+
+*** BaseCaller SOP
+   note that this is different form the SOP in base_caller,py, which changes the quality of bases based on depth and so on:
+        epilog = '''WRAIR VDB Base Calling SOP:
+        Depth < 10:
+                All bases with base quality < 25 get set to N
+                Then the base is called on the percentage(See below)
+            Depth > 10:
+                All bases with base quality < 25 get removed
+                Then the base is called on the percentage(See below)
+
+            Calling on Percentage:
+                Any base with >= 80% majority is called
+                    - or -
+                N is called if the depth was < 10 and N is > 20%
+                    - or -
+                The specific IUPAC ambiguious base is called for all bases over
+                 20%
+                    - or -
+                The majority base is called
+        ''',
+** Code
+#+NAME: Current dev on base call func
+#+BEGIN_SRC python :session 
+options = CallOptions(3, 2, 3, 4)
+def call_all(ref: str, vars: Dict[Position, Variant], raw_depths: Dict[Position, int], VARCLASS: type, options: CallOptions) -> Sequence[Call]:
+  calls: Sequence[Call] = []
+  # consensus2d: Sequence[Sequenece[Base]]
+  # for i, var in enumerate(vars):
+  # wait, don't need to cover NGSBasecaller because we already have a consensus generator for it, pretty much, right!?
+  assert len(ref) == len(raw_depths)
+  # for pos, in range(len(ref)):
+  schemas = load_user_call_schemas(VARCLASS, user_schema_path)
+  # ref_len = len(ref)
+  MAX_CONSENSUS_LEN = len(ref) # works b/c we're not doing insertions
+  while pos < ref_len:
+     ref_base, samtools_depth = ref[pos], raw_depths[pos]
+     var = vars.get(pos, None)
+#    if VARCLASS == NGSBaseCaller:
+    if samtools_depth  < options.minTotalDepthNotN:
+        call = UnderDepth((pos, pos+1), total_depth, MIN_DEPTH)
+        pos += 1
+# use variant caller options in order to enforce
+    elif (not var):
+        call = RefNoVariant( (pos, pos+1), [ref_base], ref_ratio)
+        pos += 1
+    else:
+        # TODO: try calling per-bases using user schemas
+        result = try_call_alts_seperately(var, schemas['callAlternate'])
+        if not result:
+           # write now possible insertions give 
+           # TODO: remove duplicate VCF rows
+           # note that it is possible to have /overlapping/ variants in differen positions with freebayes.
+           # should be able to over come this in the build_consensus function by taking the union
+           # of the two calls-basically lookup in the ambiguity table.
+           # This matches requirements because when there is more than one alt we call it ambiguous.
+           # For now, we just pick the first one and move on. However, we need some way of telling if it's overlapped I guess? No, we just skip it anyway
+           # TODO: the above 'more-than-one-alt' needs to be coded somewhere around here.
+           # or if # sum(var.AF) < options.whatev
+           non_alt_ratio  = 1.0 - sum( var.AF ) 
+           call = RefCallOverVairant( (pos, pos+1), [ref_base], non_alt_ratio, var.DP)
+     
+     calls.append(call) # [ call.window.start : call.window.inclusiveEnd ]
+  return calls
+#+END_SRC
+*** Calling Alts
+We give the opportunity here for [schema-]specification of behavior when more than one ALT
+is found. this can't be represented in the datatype schema itself. 
+callSingleDespiteOtherVariantsAF : .8 but default to 1, for now. 
+The below `try_call_alts_seperately` should be split up into a 'call-single' function which simply applies a `schema`
+For now we do my default schema.
+Another function, perhaps simply in the above one, decides whic ALT to use or how to combine them (via ambiguity table).
+Note that the logic is very simple here because we are just checing the AF threshold.
+In the case of an overlapped call, if one is ambiguous, we pull out the `contributing bases`
+to be combined with the overlapped call. 
+However, we shouldn't actually do this, but instead delay the ambiguiuty collapse until 
+# (applying the principle of saving your data as long as you can)
+We also collapse the overlap variants. NOTE that any call made here can be overlapped by a call on
+a preceding position (ugh). We trust the data of our original call, though, because it should on
+# see bcftools consnensus
+#+NAME find_overlapping_variants
+#+BEGIN_SRC python :session :async :results output
+from itertools import groupby
+TmpVar = dict
+def findOverlappingVariants(vars: Sequence[TmpVar]) -> Sequence[Sequence[TmpVar]]:
+  def overlap(zss, a):
+      print(zss, a)
+      try:
+          z = zss[0][0]
+          if a[0] <= z[1]: # replace [0] and [1] with window start and end
+            return [zss[0] + [a]] + zss[1:]
+      except IndexError as e:
+          print(e)
+          pass
+      default = [[a], zss]
+      return default
+   result = reduce(overlap, inputs, [])
+   return reversed(result)
+inputs = [(0, 3), (2, 4), (5, 6), (5, 7), (20, 21)]
+from functools import reduce
+print(reduce(overlap, inputs, []))
+#+END_SRC
+
+    overlap: 
+    groupby(
+   
+**** IO Seperation
+ 1. Main function: interacts with outside world
+  - Parses everything
+  - takes user inputs
+  - validate inputs 
+  - @calls the system logic
+  - writes the results of logic out somewhere
+**** Process
+  1. Visit decision 'nodes' in order. If they 'pass' the check, return, else go to next node
+#+BEGIN_SRC dot :file process.png
+digraph G {
+ UnderDepth -> CallAlt -> CallAmbiguous -> CallRef [label="NO"];
+ // CallAlt -> Return [label="YES"];
+}
+#+END_SRC
+
+#+RESULTS:
+[[file:process.png]]
+
+# TODO: branch at callalt to ambig and alt?
+
+  # _over10 = {"inclusiveMinimum" : 10}
+
+
+#+BEGIN_SRC python :session 
+# how far can we get with json schema? 
+# we can express multiple possible alts by using `anyOf`
+  # -> express that we pick 'that one'
+# callAmbiguous requires `sum`, however;
+  # -> where does the `minimum percentage contribute degen` come from?
+percent20        = { "callN" : {"DP" : { "exclusiveMaximum" : 10, "<RESULT>" : "N" } },
+                     "callAlt" : { "AF" : { "inclusiveMinimum" : 80, "<RESULT>" : "ALT" } }, 
+                     "callAmbiguous" : { "inclusiveMinimum" : 20, "exclusiveMaximum" : 80, "<RESULT>" : "???" }, 
+                     "callRef" : { "or" : [{ "PRC" : 20 }, { "AF" : { "inclusiveMaximum" : 100 - 80 } }]}}
+
+# 95 & 1 are lofreq and don't use PRC
+
+Percent1 = { "callN" : {"DP" : { "exclusiveMaximum" : 1000, "<RESULT>" : "N" } },
+"callAlt" : { "AF" : { "inclusiveMinimum" : 1, "<RESULT>" : "ALT" } },
+"callAmbiguous" : { "inclusiveMinimum" : 1, "exclusiveMaximum" : 99, "<RESULT>" : "???" },
+"callRef" : { "or" : [{ "PRC" : >99 }, { "AF" : { "inclusiveMaximum" : 100 - 99 } }]}}
+
+Percent5 = { "callN" : {"DP" : { "exclusiveMaximum" : 500, "<RESULT>" : "N" } },
+"callAlt" : { "AF" : { "inclusiveMinimum" : 5, "<RESULT>" : "ALT" } },
+"callAmbiguous" : { "inclusiveMinimum" : 5, "exclusiveMaximum" : 95, "<RESULT>" : "???" },
+"callRef" : { "or" : [{ "PRC" : >95 }, { "AF" : { "inclusiveMaximum" : 100 - 95 } }]}}
+
+#+END_SRC
+
+#+RESULTS:
+    
+    
+@dataclass
+SchemasExample:
+ underDepth   = { "DP" : { "exclusiveMaximum" : MINDEPTH, "<RESULT>" : "N" } }
+
+ call_alt = { "AF" : { "inclusiveMinimum" : 0.8 },
+   "DP" : _over10, 
+   "INDEL" : False, "<RESULT>" : "{ALT}" }
+ call_ambiguous_sum = { "DP" : _over10, "AF" { "inclusiveMinimum" : 0.01 }, "<RESULT>" : "<DEGEN>" }
+ _consider_ambiguous_single = {  "AF" { "inclusiveMinimum" : 0.01,
+ "exclusiveMaximum" : 0.8 } } # consider this single base for an ambiguous call, "<RESULT>" : "<call_ambiguous_sum>" }
+ call_ref = { "AF" : { "exclusiveMaximum" : 0.01 }, "DP" : _over10, "<RESULT>" : "{REF}" }
+# should be only one of these that returns true
+
+collapse_single_position_call
+    as_ambiguous = ''.join(sorted(over20.keys()))
+    # this could return a single base, (including the reference), becuase i.e.  A => A in the ambiguity table
+    return AMBIGUITY_TABLE[as_ambiguous] if as_ambiguous != '' else ''
+def try_call_alts_seperately(var_dict):
+    for i in range(num_alts):
+        by_alts_single = dtz.valmap(get(i), by_alts_info)
+        single_var_dict = dtz.merge(var_dict, by_alts_single)
+        def get_debug_info():
+            return str(single_var_dict)
+        # validate using
+        instance = VARCLASS(**single_var_dict)
+        validations = [instance.validate(s) for s in
+                       [schemas.call_alt,
+                        schemas.call_ambiguous, # these two are done elesewhere
+                        schemas.call_ref]       # they require the other ALT infos
+                       ]
+        assert sum(map(is_valid, validations)) > 1, f"More than one valid call for {get_info()}, see {validations}"
+        try:
+    
+           failure1 = instance.validate(schemas.call_alt)
+           if failure1:
+               failure2 = instance.validate(schemas.call_ambiguous)
+               if failure2:
+                   failure3 = instance.validate(schemas.call_ref)
+                   if failure3:
+                       raise ValueError(f"No call for {get_info()}")
+        except ValueError as e:
+            CALL_LOGGER_DEBUG(f"Did not {trying} due to failure {e}")
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord #done
+
+def build_consensus(consensus_id: str, calls: Sequence[Call]) -> SeqRecord:
+  consensus: Sequence[Base] = [] 
+
+  for call in calls:
+    
+    if (call.window.start == call.window.inclusiveEnd): # deletion
+       pass
+    consensus.extend(call.bases)
+  return SeqRecord(seq=Seq(''.join(new_ref)), id=consensus_id)
+
+    # try all possible variant calls first. if those fail, try 
+@dataclass
+class Window:
+  start: int
+  inclusiveEnd: int
+#+END_SRC
+
+#+RESULTS: Current dev on base call func
+
+#+NAME: Imports
+#+BEGIN_SRC python :session :results silent
+from dataclasses import dataclass
+import abc
+from typing import *
+import vcf
+Base = str
+decimal = float
+#+END_SRC
+
+#+NAME: ClassDefs
+#+BEGIN_SRC python :session :results silent
+
+
+@dataclass 
+class CallOptions:
+   minTotalDepthNotN: int # => DP (or if missing samtools depth) minimum depth for it not to be N
+   callVariantRatio: decimal # => AF  if any alternate is &&'s with [[minaltdepth]]
+   minAltDepth: int # => AC minimum depth for the alt to be called
+   callAmbiguousRatio: decimal # => AF if any alternate is over this ratio, it will be called as ambiguous, unless it is called as a variant (see [[callVariantRatio]])
+
+@dataclass
+class AbstractCall(metaclass=abc.ABCMeta):
+  window = Tuple[int, int] # effected_start: int effected_end: int
+  bases: Sequence[Base]
+  def size(self) -> int:
+    return window.inclusiveEnd - window.start
+
+class UnderDepth(AbstractCall):
+  bases = ['N']
+  totalDepth: int
+  threshold: int
+
+class RefNoVariant(AbstractCall): ...
+  ''' somestimes won't have this info (if not in the vcf, for exmaple)
+could put the samtools depth in here but the problem is that will be capped '''
+  samtoolsDepht: int
+
+class RefCallOverVairant(AbstractCall):
+  nonAltRatio:   decimal
+  totalDepth: int
+  record: vcf._Record
+  
+class Ambiguous(AbstractCall):
+  contributing_alts: Sequence[Base]
+  record: vcf._Record
+
+class Variant(AbstractCall): 
+  af: decimal # note this is a single value. AC etc. can be computed from it w/ totalDepth
+  totalDepth: int
+  record: vcf._Record
+
+class Deletion(Variant):
+  bases = ['']
+
+class Insertion(Variant):
+  def size(self) -> int:
+    return len(bases)
+
+
+class SNP(Variant): ...
+
+#+END_SRC
+
+
+
+* Papa Feb 11
+  :PROPERTIES:
+  :Effort:   25
+  :END:
+  :LOGBOOK:
+  CLOCK: [2020-02-11 Tue 09:35]--[2020-02-11 Tue 10:02] =>  0:27
+  :END:
+** Goals
+ 1. Succeed the test case
+   - complete process code basic
+ 2. Real-world data -- get data
+   - Ambiguity handling
+   - multiple alts
+   - picking result [[1.]]
+
+ 3. Not in vcf but under depth 
+
+#+BEGIN_SRC python :session :result output
+@dataclass
+class VCFRow:
+  AF: float
+  DP: int
+  INDEL: bool
+  ALT: Base
+  POS: int
+  REF: Base
+i = 0
+x = VCFRow(AF=1, DP=1, INDEL=False, ALT='X', POS=i+1, REF='C')
+print(x)
+#+END_SRC
+
+#+RESULTS:
+
+
+
+
+
+#+NAME: 3E81B432-9E12-4871-86CD-750333FC5818
+#+BEGIN_SRC ein-python :session :result raw
+
+#+END_SRC
+#+NAME: D8610A9A-65A2-423E-BA4D-5053B14C194A
+#+BEGIN_SRC ein-python :session :result raw
+!which conda
+from dataclasses import dataclass
+from collections import OrderedDict
+import jsonschema
+from toolz import dicttoolz as dtz
+from jsonschema.exceptions import ValidationError
+Base = str
+RefSeq = List[Base]
+SamDepth = int
+@dataclass
+class VCFRow:
+  AF: float
+  DP: int
+  INDEL: bool
+  ALT: Base
+  POS: int
+  REF: Base
+#+END_SRC 
+Recall that a consensus creation script for ngs_mapper base_caller.py exists already 
+#+NAME: A89739FA-2D73-4DD1-AE37-BA4BCF2F90F5
+#+BEGIN_SRC ein-python :session :result raw
+from typing import List,Tuple
+Schema = dict
+# MAJORITY = 80 
+Log = str 
+from functools import partial
+def percentN(MIND, MAJORITY): #TODO: requied
+  return   OrderedDict({ "callN" : {"DP" : { "exclusiveMaximum" : MIND},  "<RESULT>" : lambda x: "N" } ,
+                   "callAlt" : { "AF" : { "inclusiveMinimum" : MAJORITY} , "<RESULT>" : lambda x: x['ALT'] },  #TODO: ambiguous
+                   "callAmbiguous" : {"AF?" : { "inclusiveMinimum" : 100 - MAJORITY, "exclusiveMaximum" : MAJORITY }, "<RESULT>" : "???" }, 
+                   "callRef" : { "anyOf" : [{ "PRC" : 100 - MAJORITY }, 
+                               { "AF" : { "inclusiveMaximum" : 100 - MAJORITY } }] },
+                               "<RESULT>" : lambda x: x["REF"] })
+def consensus(depths: List[SamDepth], ref: RefSeq, alts: List[VCFRow], mind: int, majority: int) -> List[Base]:
+  keys = ["callN", "callAlt", "callAmbiguous", "callRef"]
+  schema = percentN(mind, majority)
+  result =  list(map(partial(call_base, schema), depths, ref, alts))
+  return result
+
+def call_base(schemaNodes: OrderedDict, depth: SamDepth, refBase: Base, alt: VCFRow) -> Tuple[Base, Log]:
+   vcf_dict = alt.__dict__
+   log = []
+   for key, node in schemaNodes.items():
+     try: 
+        justSchema = {"type" : "object", "properties" : dtz.dissoc(node, '<RESULT>') }
+        print( vcf_dict, justSchema)
+        jsonschema.validate( vcf_dict, justSchema)
+        result = node["<RESULT>"](vcf_dict)
+        return result, log
+     except ValidationError as e:
+        log.append((vcf_dict, e)) # TODO: handle`jsonschema.exceptions.SchemaError
+   log.append( ValueError(f"FAIL"))
+   result = None
+   return result, log
+
+def test_simplest_consensus20():
+  refSeq = [ 'A', 'C', 'C', 'C' ]
+  depths =  [ 100 ] * 4
+  dumbRows = [VCFRow(AF=1, DP=1, INDEL=False, ALT='X', POS=i+1, REF='C') for i in range(3)]
+  alts = [VCFRow(AF=81, DP=100, INDEL=False, ALT='G', POS=0, REF='A')] + dumbRows
+  actual = consensus(depths, refSeq, alts, 10, 80)
+  actual, log = zip(*actual) # [x[0] for x in actual]
+  print(f"log: {log}")
+  expected = ( 'G', 'N', 'N', 'N' )
+  assert  actual == expected, f"{actual} != {expected}"
+  print ("test_simplest_consensus20 passed!")
+
+  return   OrderedDict({ "callN" : {"DP" : { "exclusiveMaximum" : MIND},  "<RESULT>" : lambda x: "N" } ,
+                   "callAlt" : { "AF" : { "inclusiveMinimum" : MAJORITY} , "<RESULT>" : lambda x: x['ALT'] },  #TODO: ambiguous
+                   "callAmbiguous" : {"AF?" : { "inclusiveMinimum" : 100 - MAJORITY, "exclusiveMaximum" : MAJORITY }, "<RESULT>" : "???" }, 
+                   "callRef" : { "anyOf" : [{ "PRC" : 100 - MAJORITY }, 
+                               { "AF" : { "inclusiveMaximum" : 100 - MAJORITY } }] },
+                               "<RESULT>" : lambda x: x["REF"] })
+# create an "AMBIG" field for each alt which has the summed AF and ambiguous data already?
+# only consider the highest AF-sum variant if there are /overlapping/ variants 
+# there cannot be more than one AF that will be over majority to be called an alt. 
+# QUESTION: what's the minimum percentage to consider for a degenerate base? 
+# At what percentage should the ref be considered?
+# note that refcall and ambiguous call really operate on SUMAF. 
+      
+ _consider_ambiguous_single = {  "AF" { "inclusiveMinimum" : 0.01,
+test_simplest_consensus20()
+
+jsonschema.validate({'AF': 81, 'DP': 100, 'INDEL': False, 'ALT': 'G', 'POS': 0, 'REF': 'A'}, {'required' : ['DP'], 'DP': {'exclusiveMaximum': 10}})
+#+END_SRC
+Correct behavior: 
+   - be called ambiguous if ANY alt is AF > (100 - MAJORITY)
+   - consider any ALT or REF in the ambiguous mix if the percentage is greater than (100 - MAJORITY)
+   - call REF if 
+   - a valid REF can have ambig bases. 
+Change: 
+  - `consensus` assumes alts for each position: perhaps replace empty positions with a description of the 
+    samtools depth and the reference, or handle that after-the-fact.
+  - match the consensus calls up by POS, not assuming correct order.
+#+RESULTS: A89739FA-2D73-4DD1-AE37-BA4BCF2F90F5
+
+#+RESULTS:
+
+
+** Process
+   :PROPERTIES:
+   :Effort:   0:25
+   :END:
+   :LOGBOOK:
+   CLOCK: [2020-02-11 Tue 10:06]--[2020-02-11 Tue 11:52] =>  1:46
+   :END:
+
+A. Setup
+ - [X] Put nodes in a list
+ - [ ] setup log
+B. Do for all positions:
+ - Iterate over nodes, 
+   1. return <RESULT> when sucess
+   2. log failure
+      - [X] capture the error
+      - [ ] get input
+     
+** TODOs  
+ - [X] make schema result right place
+ - [X] make schema and alt match (by expanding __dict__)
+ - [ ] capture 
+#+BEGIN_SRC python :session 
+    
+RefSeq = List[Base]
+Base = str
+SamDepth = int
+@dataclass
+class VCFRow:
+  AF: float
+  DP: int
+  INDEL: bool
+  ALT: Base
+  POS: int
+  REF: Base
+
+from dataclasses import dataclass
+def test_simplest_consensus20():
+  refSeq = [ 'A', 'C', 'C', 'C' ]
+  depths =  [ 100 ] * 4
+  dumbRows = [VCFRow(AF=1, DP=1, INDEL=False, ALT='X', POS=i+1, REF='C') for i in range(3)]
+  alts = [VCFRow(AF=81, DP=100, INDEL=False, ALT='G', POS=0, REF='A')] + dumbRows
+  actual = consensus(depths, refSeq, alts)
+  expected = [ 'G', 'N', 'N', 'N' ]
+  assert actual == expected, f"{actual} != {expected}"
+def main(): # entry point
+  
+def consensus(depths: List[SamDepth], ref: RefSeq, alt: List[VCFRow]) -> List[Base]: ... 
+   ''' len(ref) >= max(POS in VCFRow) 
+       len(depths) == len(ref) 
+        # ref base in rows and ref should match
+   Process:
+   Postcondition: Consensus sequence #TODO: define better
+                  Report: for each possibility, what was met and not and how
+   
+   '''
+   results = map(call_base, 
+
+
+def call_base(depth: SamDepth, refBase: Base, alt: VCFRow) -> Base: ... # report
+   '''
+ ''' 
+
+#+END_SRC
+
+* 
+
+* Consensus Generator for NGS Mapper, GATK and Feebayse 
+** 
+* ADT
+
+** Datatype
+class VCFRow: POS: int DP: int REF: Base
+VCFCall(VCFRow): AF: float INDEL: bool ALT: Base
+VCFNoCall(VCFRow): ...
+Sequences are represented as List[Base] (where Base == str) (and in IUPAC_AMBIG)
+
+** Preconditions
+def consensus(depths: List[int], ref: List[Base], alts: List[VCFRow], pa: PercentAnalysis) -> Tuple[List[Base], List[Log]]:
+  assert len(depths) == len(ref), f"{depths}, {ref}"
+  assert len(depths) > 0
+  assert 0 <= pa.mind <= 100
+  assert 0 <= pa.majority <= 100
+  assert all(map(IUPAC_AMBIG.__contains__, ref))
+
+** Postconditions
+return a Tuple of List[Base] and List[Log], where there is a base and a log for every base in input reference
+assert len(returnVal[0]) == len(ref)
+returnBases[i] will be 'N' when depths[i] < pa.mind # as defined by schema
+returnBases[i] will be an ALT call when callAlt in schema validates for ref[i]
+returnBases[i] will be an ambiguous call from the union of all ALTS at i when callAmbiguous validates
+returnBases[i] will be ref[i] when REF `in` IUPAC_AMBIG and the above schemas were not validated (as default)
+
+returnLog[i] will be a list of strings representing only the successful schema's properties on successful validation, and a list of strings including
+the falied validation message for each failed validation and schema
+
+
+
+** Process
