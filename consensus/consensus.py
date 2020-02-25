@@ -9,22 +9,22 @@ import os.path
 
 @dataclass
 class VCFRow:
-POS: int
-DP: int
-REF: Base #  def get_depth(self) -> int: ...  #  def get_ref(self) -> Base: ...
+    POS: int
+    DP: int
+    REF: Base #  def get_depth(self) -> int: ...  #  def get_ref(self) -> Base: ...
 
 class VCFCall(VCFRow):
-AF: float
-INDEL: bool
-ALT: Base
+    AF: float
+    INDEL: bool
+    ALT: Base
 
 
 class VCFNoCall(VCFRow): ...
 
 @dataclass
 class PercentAnalysis:
-mind: int
-majority: int
+    mind: int
+    majority: int
 
 Schema = dict
 # MAJORITY = 80
@@ -33,27 +33,26 @@ from functools import partial
 IUPAC_AMBIG = ['A', 'C', 'T', 'G', 'R', 'Y', 'S', 'W', 'R', 'K', 'V', 'H', 'D', 'B']
 
 
-def ():
+def main():
  parser = argparse.ArgumentParser()
 
  parser.add_argument('-i', '--input_file', type=str, required=True, help='Path to input file to be read')
  parser.add_argument('-o', '--output_file', type=str, required=True, help='Path to input file to be read')
- parser.add_argument('-n', '--min_depth', type=int, required=True, help='input value for min depth')
- parser.add_argument('-r', '--input_file', type=str, required=True, help='Path to input file to be refernce file')
+ parser.add_argument('-n', '--mind', type=int, required=True, help='input value for min depth')
+ parser.add_argument('-r', '--vcf_input_file', type=str, required=True, help='Path to input file to be refernce file')
  parser.add_argument('-m', '--majority', type=int, required=True, help='input value for majoirty')
  Base = str
  RefSeq = List[Base]
  SamDepth = int
 
-  '''The consensus program is designed to take iterate through VCFrows to curate and generate consensus sequences.
-  Define Classses for the consensus program include VCFRow, VCFCall, VCFNoCall, PercentAnalysis'''
+ #The consensus program is designed to take iterate through VCFrows to curate and generate consensus sequences.
+ #Define Classses for the consensus program include VCFRow, VCFCall, VCFNoCall, PercentAnalysis
 
 
 
-
-''' The percentN(PercentAnalysis) function takes in two arguements i.e. minimum depth(eg. 10, 500 or 1000) and mamjotiry cal i.e.(80, 95 or 99.
-percentN returns four possible outcomes outcomes as an OrderedDict based on preconditions of depth, allel frequency and percent anbnalysis.
-all outcomes are returned as a sorted orederedDict based on N, ALT, MAJORITY, and Ref.'''
+ ''' The percentN(PercentAnalysis) function takes in two arguements i.e. minimum depth(eg. 10, 500 or 1000) and mamjotiry cal i.e.(80, 95 or 99.
+ percentN returns four possible outcomes outcomes as an OrderedDict based on preconditions of depth, allel frequency and percent anbnalysis.
+ all outcomes are returned as a sorted orederedDict based on N, ALT, MAJORITY, and Ref.'''
 def percentN(MIND, MAJORITY): #TODO: requied
     return   OrderedDict({ "callN" : {"DP" : { "exclusiveMaximum" : MIND},  "<RESULT>" : lambda x: "N" } ,
          "callAlt" : { "AF" : { "inclusiveMinimum" : MAJORITY} , "<RESULT>" : lambda x: x['ALT'] },  #TODO: ambiguous
@@ -110,28 +109,29 @@ def call_base(schemaNodes: OrderedDict, alt: VCFRow) -> Tuple[Base, Log]:
           jsonschema.validate( vcf_dict, justSchema)
           result = node["<RESULT>"](vcf_dict)
           return result, log
-          except ValidationError as e:
+          #except ValidationError as e:
           log.append((vcf_dict, e)) # TODO: handle`jsonschema.exceptions.SchemaError
           log.append( ValueError(f"FAIL"))
           result = None
           return result, log
-
-
-''' The work flow or call stack for these fucntions:
-consensus_iml cals on the callbase and percentN function,
-the consensus function calls on consensus_iml.
-The main entry point fucntion is consensus and the base case fucntion are callbase and percentN
-with cosensus_impl being the middle function'''
-
-
-def validate(sorted_alts: List[VCFRow], mind: int, majority:int, ref: list[bases]):
-
-    '''  Validate preconditions through assertion statements '''
-    assert ref == list[bases]
-    assert sorted_alts == List[VCFRow]
-    assert mind == int
-    assert majoirty == int
-    return null
+          
+          
+          
+          
+          ''' The work flow or call stack for these fucntions:
+          consensus_iml cals on the callbase and percentN function,
+          the consensus function calls on consensus_iml.
+          The main entry point fucntion is consensus and the base case fucntion are callbase and percentN
+          with cosensus_impl being the middle function. Validate preconditions through assertion statements'''
+          def validate(sorted_alts: List[VCFRow], mind: int, majority:int, ref: list[bases])-> null:
+              r = chmod 777 input_file
+              q = chmod 777 output_file
+              m = 80 =< majority < 99
+              assert input_file == r
+              assert output_file == q
+              assert mind == int
+              assert majoirty == m
+              return null
 
 
 
