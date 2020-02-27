@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import List,Tuple,Dict
+from pathlib import Path
+import glob, os
 import jsonschema
 from collections import OrderedDict
 from toolz import dicttoolz as dtz
@@ -17,7 +19,6 @@ class VCFCall(VCFRow):
     AF: float
     INDEL: bool
     ALT: Base
-
 
 class VCFNoCall(VCFRow): ...
 
@@ -123,15 +124,42 @@ def call_base(schemaNodes: OrderedDict, alt: VCFRow) -> Tuple[Base, Log]:
           the consensus function calls on consensus_iml.
           The main entry point fucntion is consensus and the base case fucntion are callbase and percentN
           with cosensus_impl being the middle function. Validate preconditions through assertion statements'''
-          def validate(sorted_alts: List[VCFRow], mind: int, majority:int, ref: list[bases])-> null:
-              r = chmod 777 input_file
-              q = chmod 777 output_file
-              m = 80 =< majority < 99
-              assert input_file == r
-              assert output_file == q
-              assert mind == int
-              assert majoirty == m
-              return null
+
+
+def write_validate(output_file: List[VCFRow]):
+        try:
+        for output_file in glob.glob("\\*.txt"):
+          if os.access(output_file, os.W_OK):
+              print("validfile")
+    except IOError as err:
+        print("could not write file {0}: {1}".format(sorted_alts, err):
+        break:
+
+
+
+def read_validate(sorted_alts: List[VCFRow]):
+    try:
+        for sorted_alts in glob.glob("\\*.txt"):
+          if os.access(sorted_alts, os.R_OK):
+              print("validfile")
+    except IOError as err:
+        print("could not read file {0}: {1}".format(sorted_alts, err)
+        break:
+      
+def bound(mind: int, majority: int):
+    try:
+        for mind in range(0,20) and majority in range(80,100):
+            if assert mind >= 20 and majority >= 80:
+                print("valid input")
+    except IOError as err:
+        print("invalid input{0}: {1}".format(mind,majority err):
+        break:
+    
+      
+
+
+
+
 
 
 
@@ -142,3 +170,4 @@ def call_base(schemaNodes: OrderedDict, alt: VCFRow) -> Tuple[Base, Log]:
  #                  "callRef" : { "anyOf" : [{ "PRC" : 100 - MAJORITY },
   #                             { "AF" : { "inclusiveMaximum" : 100 - MAJORITY } }] },
    #                            "<RESULT>" : lambda x: x["REF"] })
+
