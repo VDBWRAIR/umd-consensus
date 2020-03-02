@@ -1,7 +1,6 @@
-from typing import List
+from typing import List, NamedTuple
 from consensus.consensus import Base, PercentAnalysis
 from consensus.consensus import consensus
-from dataclasses import dataclass
 import unittest
 RefSeq = List[Base]
 Base = str
@@ -12,8 +11,7 @@ dumbRows = ()
 tc = unittest.TestCase()
 SamDepth= int
 
-@dataclass
-class VCFCall:
+class VCFCall(NamedTuple):
     AF: float
     DP: int
     INDEL: bool
@@ -75,7 +73,7 @@ def test_variant_ambig():
    # print(f"consensus({depths}, {refseq}, {alts})")
 
 
-def test_simplest_consensus20():
+def test_simplest_consensus_other_20():
   refSeq = [ 'A', 'C', 'C', 'C' ]
   depths =  [ 100 ] * 4
   dumbRows = [VCFCall(AF=1, DP=1, INDEL=False, ALT='X', POS=i+1, REF='C') for i in range(3)]
