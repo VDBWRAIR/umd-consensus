@@ -1,93 +1,208 @@
-from typing import List, NamedTuple
-from consensus.consensus import Base, PercentAnalysis
-from consensus.consensus import consensus
-import unittest
-RefSeq = List[Base]
+from functools import partial
+from typing import List, Tuple, Dict, NamedTuple
+from pathlib import Path
+import glob
+import os
+import jsonschema
+from collections import OrderedDict
+from toolz import dicttoolz as dtz
+from jsonschema.exceptions import ValidationError
+import argparse
+import os.path
+
 Base = str
-depths = ()
-dumbRows = ()
 
 
-tc = unittest.TestCase()
-SamDepth= int
-
-class VCFCall(NamedTuple):
-    AF: float
-    DP: int
-    INDEL: bool
-    ALT: Base
+class VCFRow(NamedTuple):
     POS: int
+    DP: int
+    # def get_depth(self) -> int: ...  #  def get_ref(self) -> Base: ...
     REF: Base
 
 
+class VCFCall(VCFRow):
+    AF: float
+    INDEL: bool
+    ALT: Base
 
 
-def test_simplest_consensus20():
-    refSeq = ["A","M","Y","C", "T"]
-    depths = [1000,5, 150,100,250]
-    #dumbRows = [VCFCall(AF=1, DP=1, INDEL=False, ALT='X', POS=i+1, REF='M') for i in range(3)]
-    alts = [VCFCall(AF=50, DP=5, INDEL=False, ALT='A', POS=1, REF='M')] #+dumbRows
-    expected = ["A","N","Y","C","T"]
-    result, log =  consensus(depths=[100, 100, 100, 100, 100], ref = refSeq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == list(result)
-    print(f"consensus({depths}, {refSeq}, {alts})")
-
-#test_simplest_consensus20(i)
+class VCFNoCall(VCFRow): ...
 
 
-
-def test_filter_ambigs():
-    refseq = ["G","T","S","T"]
-    alts= [VCFCall(AF=75, DP=500 , INDEL=False, ALT="C", POS=2, REF="S" )]
-    expected = ["G","T","S","T"]
-    result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == list(result)
-    print(f"consensus({depths}, {refseq}, {alts})")
+class PercentAnalysis(NamedTuple):
+    mind: int
+    majority: int
 
 
-def test_AF():
-    refseq = ["G","T","S","T"]
-    alts= [VCFCall(AF=15, DP=500 , INDEL=False, ALT="C", POS=2, REF = "S" )]
-    expected = ["G","T","G","T"]
-    result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == list(result)
-    print(f"consensus({depths}, {refseq}, {alts})")
+Schema = dict
+# MAJORITY = 80
+Log = str
+IUPAC_AMBIG = ['A', 'C', 'T', 'G', 'R', 'Y',
+    'S', 'W', 'R', 'K', 'V', 'H', 'D', 'B']
 
 
-def test_variant():
-    refseq = ["G","T","S","T"]
-    alts= [VCFCall(AF=85, DP=500 , INDEL=False, ALT="A", POS=2, REF = "S" )]
-    expected = ["G","T","A","T"]
-    result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    assert expected == list(result)
-    print(f"consensus({depths}, {refseq}, {alts})")
+def main():
+ parser = argparse.ArgumentParser()
+ parser.add_argument('-p', '--bam_input_file', type=str,
+                     required=True, help='Path to input file to be read')
+ parser.add_argument('-i', '--ref_input_file', type=str,
+                     required=True, help='Path to input file to be read')
+ parser.add_argument('-o', '--output_file', type=str,
+                     required=True, help='Path to input file to be read')
+ parser.add_argument('-n', '--mind', type=int, required=True,
+                     help='input value for min depth')
+ parser.add_argument('-r', '--vcf_input_file', type=str,
+                     required=True, help='Path to input file to be refernce file')
+ parser.add_argument('-m', '--majority', type=int,
+                     required=True, help='input value for majoirty')
+# args = parser.
+# args.vcf_input_file, args.majority
+ 
+
+if __name__ == '__main__':
+    main()
+
+Base = str
+RefSeq = List[Base]
+SamDepth = int
+
+ #The consensus program is designed to take iterate through VCFrows to curate and generate consensus sequences.
+ #Define Classses for the consensus program include VCFRow, VCFCall, VCFNoCall, PercentAnalysis
+
+ ''' The percentN(PercentAnalysis) function takes in two arguements i.e. minimum depth(eg. 10, 500 or 1000) and mamjotiry cal i.e.(80, 95 or 99.
+ percentN returns four possible outcomes outcomes as an OrderedDict based on preconditions of depth, allel frequency and percent anbnalysis.
+ all outcomes are returned as a sorted orederedDict based on N, ALT, MAJORITY, and Ref.'''
 
 
-def test_variant_ambig():
-    refseq = ["G","T","S","T"]
-    alts= [VCFCall(AF=50, DP=500 , INDEL=False, ALT="A", POS=2, REF = "S" )]
-    expected = ["G","T","R","T"]
-    result, log =  consensus(depths=[100, 100, 100, 100], ref = refseq, alts = alts, pa=PercentAnalysis(mind = 10, majority = 80))
-    print(f"log: {log}")
-    assert expected == list(result), f"{result} != {expected}"
-   # print(f"consensus({depths}, {refseq}, {alts})")
+def percentN(MIND, MAJORITY):  # TODO: requied
+    return OrderedDict({"callN": {"DP": {"exclusiveMaximum": MIND},  "<RESULT>": lambda x: "N"},
+         # TODO: ambiguous
+         "callAlt": {"AF": {"inclusiveMinimum": MAJORITY}, "<RESULT>": lambda x: x['ALT']},
+         "callAmbiguous": {"AF?": {"inclusiveMinimum": 100 - MAJORITY, "exclusiveMaximum": MAJORITY}, "<RESULT>": "???"},
+         "callRef": {"anyOf": [{"PRC": 100 - MAJORITY},
+                     {"AF": {"inclusiveMaximum": 100 - MAJORITY}},
+                     {"REF": {"anyOf":  IUPAC_AMBIG}}]},  # calling ref is the default case
+                     "<RESULT>": lambda x: x["REF"]})
+# , "required" : ["AF", "ALT"]
+# , "required" : True
+# def consensus(depths: List[SamDepth], ref: RefSeq, alts: List[VCFRow], mind: int, majority: int) -> List[Base]:
 
 
-def test_simplest_consensus_other_20():
-  refSeq = [ 'A', 'C', 'C', 'C' ]
-  depths =  [ 100 ] * 4
-  dumbRows = [VCFCall(AF=1, DP=1, INDEL=False, ALT='X', POS=i+1, REF='C') for i in range(3)]
-  alts = [VCFCall(AF=81, DP=100, INDEL=False, ALT='G', POS=0, REF='A')] + dumbRows
-  actual, log = consensus(depths, refSeq, alts, pa=PercentAnalysis(10, 80))
-
-  # actual, log = zip(*actual) # [x[0] for x in actual]
-  print(f"log: {log}")
-  expected = [ 'G', 'N', 'N', 'N' ]
-  assert  expected == list(actual) , f"{actual} != {expected}"
+''' The consensus function takes in four  arguements i.e. the depths as a List of inetegers, and the reference as a list of ref bases,
+alts as a list of VCFRows and percentanalysis,It returns a list of Tuples with a log file.
+Precoditions include checking that there is an equal number of depths correlating with the lenght of the reference,
+the depths is not equal to zero. Mechanism: There is an iterative function with defining condtions that  loops through a range of positions
+to return consensus baseses as a list of tuples'''
 
 
+def consensus(depths: List[int], ref: List[Base], alts: List[VCFRow], pa: PercentAnalysis) -> Tuple[List[Base], List[Log]]:
+     assert len(depths) == len(ref), f"{depths}, {ref}"
+     assert len(depths) > 0
+     just_alts = {row.POS: row for row in alts}
+     ordered_alts = []
+     with_pos = zip(range(1_000_000_000), depths, ref)
+     for pos, depth, ref in with_pos:
+           existing_alt = just_alts.get(pos, None)
+     if existing_alt:
+           ordered_alts.append(existing_alt)
+     else:
+           ordered_alts.append(VCFNoCall(pos, depth, ref))
+           as_list_tuples = consensus_impl(ordered_alts, pa.mind, pa.majority)
+           return tuple(zip(*as_list_tuples))
+
+
+''' The consensus_impl takes 3 arguments i.e. (List of VCFRow, minimum depth and majority call analysis eg(80, 95 or 99).
+The keys specify the four calling options based on the schema or preconditions adressed by the percentN function.
+the return is of base calls the utilizes a callbase function'''
+
+
+def consensus_impl(sorted_alts: List[VCFRow], mind: int, majority: int) -> List[Tuple[Base, Log]]:
+    keys = ["callN", "callAlt", "callAmbiguous", "callRef"]
+    schema = percentN(mind, majority)
+    result = list(map(lambda alt:  call_base(schema, alt), sorted_alts))
+    return result
+
+
+'''The callbase function takes in two arguements i.e. VCFRow and OrderedDict(Dictionary).
+It utilizes the jsonschema to validate base calls, read up on jason schema for more details'''
+
+
+def call_base(schemaNodes: OrderedDict, alt: VCFRow) -> Tuple[Base, Log]:
+  vcf_dict = alt.__dict__
+  log = []
+  for key, node in schemaNodes.items():
+    try:
+      justSchema = {"type": "object",  "properties": dtz.dissoc(node, '<RESULT>')}
+      print(vcf_dict, justSchema)
+      jsonschema.validate(vcf_dict, justSchema)
+      result = node["<RESULT>"](vcf_dict)
+      return result, log
+    except ValidationError as e:  # TODO: handle`jsonschema.exceptions.SchemaError
+      log.append((vcf_dict, e))
+      log.append(ValueError(f"FAIL"))
+      result = None
+      return result, log
+
+
+
+
+ # The work flow or call stack for these fucntions
+  #consensus_iml cals on the callbase and percentN function,
+ #the consensus function calls on consensus_iml.
+#The main entry point fucntion is consensus and the base case fucntion are callbase and percentN
+#with cosensus_impl being the middle function. Validate preconditions through assertion statements'''
+
+def write_validate(output_file: List[VCFRow])-> bool:   
+    try:
+        if os.access(output_file, os.W_OK):
+            return True 
+    except IOError as err:
+        print("could not write file {0}: {1}".format(output_file, err))
+        return None
+
+def read_validate(inputfiles )-> bool:
+    try:
+        for input_file in inputfiles:
+          if os.access(input_file, os.R_OK):
+              return True
+    except IOError as err:
+        print("could not read file {0}: {1}".format(input_file, err))
+        return None
+
+def inputArgs(bam_input_file, vcf_input_file, ref_input_file,out_file)-> bool:
+    #Input files include 3 input files form user and a name outputile
+    inputfiles = {bam_input_file, vcf_input_file, ref_input_file}
+    
+    output= write_validate(out_file)
+
+    for file in inputfiles:
+        done = read_validate(file)
+    return done and output
+    #Postcodition: returns a boolean for read_validate function
+
+
+      
+def bound(mind: int, majority: int):
+    try:
+        for mind in range(0,20) and majority in range(80,100):
+            assert mind >= 20 and majority >= 80
+            print("valid input")
+    except IOError as err:
+        print("invalid input{0}: {1}".format(mind,majority))
+        return None
+    
+      
 
 
 
 
 
+
+
+
+#  return   OrderedDict({ "callN" : {"DP" : { "exclusiveMaximum" : MIND},  "<RESULT>" : lambda x: "N" } ,
+ #                  "callAlt" : { "AF" : { "inclusiveMinimum" : MAJORITY} , "<RESULT>" : lambda x: x['ALT'] },  #TODO: ambiguous
+#                   "callAmbiguous" : {"AF?" : { "inclusiveMinimum" : 100 - MAJORITY, "exclusiveMaximum" : MAJORITY }, "<RESULT>" : "???" },
+ #                  "callRef" : { "anyOf" : [{ "PRC" : 100 - MAJORITY },
+  #                             { "AF" : { "inclusiveMaximum" : 100 - MAJORITY } }] },
+   #                            "<RESULT>" : lambda x: x["REF"] })
