@@ -5,6 +5,5 @@ typing
 jsonschema
 toolz
 Pytest
-
-
-
+biopython
+PyVCF
