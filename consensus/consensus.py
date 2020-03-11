@@ -55,7 +55,11 @@ def main():
                      required=True, help='Path to input file to be refernce file')
  parser.add_argument('-m', '--majority', type=int,
                      required=True, help='input value for majoirty')
-# args = parser.
+ args = parser.parse_args()
+ process = consensus(args.n, args.i, args.r, args.m)
+ return process
+
+#Write process into args.o
 # args.vcf_input_file, args.majority
  
 
@@ -69,7 +73,7 @@ SamDepth = int
  #The consensus program is designed to take iterate through VCFrows to curate and generate consensus sequences.
  #Define Classses for the consensus program include VCFRow, VCFCall, VCFNoCall, PercentAnalysis
 
- ''' The percentN(PercentAnalysis) function takes in two arguements i.e. minimum depth(eg. 10, 500 or 1000) and mamjotiry cal i.e.(80, 95 or 99.
+''' The percentN(PercentAnalysis) function takes in two arguements i.e. minimum depth(eg. 10, 500 or 1000) and mamjotiry cal i.e.(80, 95 or 99.
  percentN returns four possible outcomes outcomes as an OrderedDict based on preconditions of depth, allel frequency and percent anbnalysis.
  all outcomes are returned as a sorted orederedDict based on N, ALT, MAJORITY, and Ref.'''
 
@@ -206,3 +210,4 @@ def bound(mind: int, majority: int):
  #                  "callRef" : { "anyOf" : [{ "PRC" : 100 - MAJORITY },
   #                             { "AF" : { "inclusiveMaximum" : 100 - MAJORITY } }] },
    #                            "<RESULT>" : lambda x: x["REF"] })
+
